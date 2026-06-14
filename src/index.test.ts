@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import plugin, { safeMediaUri } from './index'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import plugin, { safeMediaUri, safeListPath } from './index'
 
 describe('timmy-plugin-machine', () => {
   it('declares 5 tools with correct risk tiers', () => {
@@ -43,5 +45,26 @@ describe('safeMediaUri (playMedia hardening — `open <uri>` injection guard)', 
     const r = await playMedia.execute({ uri: 'file:///etc/passwd' }, ctx)
     expect(r.ok).toBe(false)
     expect(r.error).toMatch(/refused media URI scheme/)
+  })
+})
+
+describe('safeListPath (listDirectory hardening — secret-dir enumeration guard)', () => {
+  it('refuses well-known secret directories (and paths under them)', () => {
+    expect(() => safeListPath(join(homedir(), '.ssh'))).toThrow(/sensitive directory/)
+    expect(() => safeListPath('~/.aws')).toThrow(/sensitive directory/)
+    expect(() => safeListPath(join(homedir(), '.ssh', 'config'))).toThrow(/sensitive directory/)
+  })
+
+  it('allows ordinary directories (returns the resolved absolute path)', () => {
+    expect(safeListPath('/tmp')).toBe('/tmp')
+    expect(safeListPath(join(homedir(), 'Downloads'))).toBe(join(homedir(), 'Downloads'))
+  })
+
+  it('listDirectory tool returns {ok:false} for a secret dir without reading it', async () => {
+    const listDirectory = plugin.tools.find((t) => t.name === 'listDirectory')!
+    const ctx = { credentials: { get: async () => null }, signal: new AbortController().signal }
+    const r = await listDirectory.execute({ path: '~/.ssh' }, ctx)
+    expect(r.ok).toBe(false)
+    expect(r.error).toMatch(/sensitive directory/)
   })
 })

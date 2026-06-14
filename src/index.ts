@@ -1,6 +1,7 @@
 import type { TimmyPlugin, Tool, ToolResult } from 'timmy-sdk'
 import { createMachine } from '@agent-tool-calls/machine'
 import { homedir } from 'node:os'
+import { resolve, sep } from 'node:path'
 
 // Lazy so an unsupported-platform throw from createMachine() surfaces inside a
 // tool's catchable execute() (as {ok:false,error}) instead of crashing module load.
@@ -32,6 +33,20 @@ export const safeMediaUri = (raw: string): string => {
     throw new Error(`refused media URI scheme '${url.protocol}' — allowed: http, https, spotify`)
   }
   return raw
+}
+
+// listDirectory returns filenames to the model; refuse well-known secret dirs so an
+// injected "list ~/.ssh" can't enumerate credentials. Defense-in-depth (not airtight vs
+// symlinks) — the per-tool permission policy + untrusted-content review own broader gating.
+const SENSITIVE_DIRS = ['.ssh', '.aws', '.gnupg', '.kube', 'Library/Keychains'].map((d) =>
+  resolve(HOME, d),
+)
+export const safeListPath = (raw: string): string => {
+  const abs = resolve(raw.replace(/^~(?=$|[/\\])/, HOME))
+  if (SENSITIVE_DIRS.some((d) => abs === d || abs.startsWith(d + sep))) {
+    throw new Error(`refused: '${raw}' is a sensitive directory`)
+  }
+  return abs
 }
 
 const tool = (
@@ -73,7 +88,7 @@ const plugin: TimmyPlugin = {
       (a) => machine().playMedia(safeMediaUri(String(a.uri))),
     ),
     tool('listDirectory', 'List entries in a directory', 'safe', strParam('path', 'dir path'), (a) =>
-      machine().listDirectory(String(a.path)),
+      machine().listDirectory(safeListPath(String(a.path))),
     ),
     tool('deleteFile', 'Delete a file', 'confirm', strParam('path', 'file path'), (a) =>
       machine().deleteFile(String(a.path)),
