@@ -1,6 +1,6 @@
 {
   "name": "timmy-plugin-machine",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "commonjs",
   "main": "dist/index.js",
@@ -9,8 +9,8 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "timmy-sdk": "^0.1.1",
-    "@agent-tool-calls/machine": "^0.1.0",
+    "timmy-sdk": "^0.2.0",
+    "tool-call-machine": "^0.1.0",
     "tsup": "^8.3.0",
     "vitest": "^3.2.6",
     "@types/node": "^24.0.0",
