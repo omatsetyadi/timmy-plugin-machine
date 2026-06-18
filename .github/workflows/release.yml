@@ -1,0 +1,36 @@
+name: release
+
+# Build the plugin AT PUBLISH (never at install): on a version tag, build the self-contained bundle
+# and attach index.js + SHA256SUMS to a GitHub Release. `timmy plugin install` fetches those — no
+# clone/npm/build on the user's machine. Public repo → free Actions minutes. Manual dispatch builds
+# + smoke-tests without publishing.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+      - name: Package the bundle as index.js (the asset `timmy plugin install` fetches)
+        run: cp dist/index.js index.js
+      - name: Checksums
+        run: sha256sum index.js > SHA256SUMS
+      - name: Smoke — the bundle imports and is a TimmyPlugin
+        run: node -e "const m=require('./index.js'); const p=m.default ?? m; if(!p||!p.name){throw new Error('not a plugin bundle')} console.log('plugin:',p.name)"
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            index.js
+            SHA256SUMS
